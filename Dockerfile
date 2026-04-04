@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 複製專案原始碼
 COPY . .
 
-# 曝露 FastAPI 埠號
-EXPOSE 8000
+# 曝露 Hugging Face 預設的 7860 埠號
+EXPOSE 7860
 
-# 啟動命令
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 啟動命令，讓它自動監聽 7860 或環境變數指定的 PORT
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]

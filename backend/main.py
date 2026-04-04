@@ -92,5 +92,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+    import os
     config = load_config()
-    uvicorn.run(app, host=config.core.host, port=config.core.port)
+    # Priority: Env variable PORT (HF standard) > Config file
+    port = int(os.environ.get("PORT", config.core.port))
+    uvicorn.run(app, host=config.core.host, port=port)
