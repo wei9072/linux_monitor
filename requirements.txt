@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pyyaml
+pydantic
+psutil
+pytest
+websockets
+requests
+rich

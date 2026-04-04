@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux System Monitor Dashboard</title>
+    <!-- Vue 3 & ECharts via CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --primary-color: #3498db;
+        }
+
+        body.dark-theme {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            --primary-color: #3498db;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .status-connected { background: #2ecc71; color: white; }
+        .status-disconnected { background: #e74c3c; color: white; }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 15px;
+            min-height: 350px;
+        }
+
+        .card-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 300px;
+        }
+    </style>
+</head>
+<body :class="{'dark-theme': config.appearance?.theme === 'dark'}">
+    <div id="app">
+        <div class="header">
+            <h1>Linux System Monitor <small style="font-size: 0.5em; opacity: 0.7;">v1.0</small></h1>
+            <div>
+                <span :class="['status-badge', isConnected ? 'status-connected' : 'status-disconnected']">
+                    {{ isConnected ? 'CONNECTED' : 'DISCONNECTED' }}
+                </span>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <!-- CPU Chart -->
+            <div class="card">
+                <div class="card-title">CPU Usage (%) & Temp (°C)</div>
+                <div id="cpu-chart" class="chart-container"></div>
+            </div>
+
+            <!-- Memory Chart -->
+            <div class="card">
+                <div class="card-title">Memory Usage (%)</div>
+                <div id="mem-chart" class="chart-container"></div>
+            </div>
+
+            <!-- Network Chart -->
+            <div class="card">
+                <div class="card-title">Network Traffic (KB/s)</div>
+                <div id="net-chart" class="chart-container"></div>
+            </div>
+
+            <!-- Disk Chart -->
+            <div class="card">
+                <div class="card-title">Disk I/O (KB/s)</div>
+                <div id="disk-chart" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, onUnmounted } = Vue;
+
+        createApp({
+            setup() {
+                const isConnected = ref(false);
+                const config = ref({});
+                let ws = null;
+                const charts = {};
+
+                const initChart = (id, title, color) => {
+                    const chart = echarts.init(document.getElementById(id), config.value.appearance?.theme === 'dark' ? 'dark' : null);
+                    chart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'time', splitLine: { show: false } },
+                        yAxis: { type: 'value', boundaryGap: [0, '100%'] },
+                        series: [{
+                            name: title,
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: [],
+                            itemStyle: { color: color },
+                            areaStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: color },
+                                    { offset: 1, color: 'rgba(255, 255, 255, 0)' }
+                                ])
+                            }
+                        }]
+                    });
+                    return chart;
+                };
+
+                const updateCharts = (metrics) => {
+                    const time = metrics.timestamp * 1000;
+                    
+                    // CPU
+                    charts.cpu.setOption({
+                        series: [{ data: [...charts.cpu.getOption().series[0].data, [time, metrics.cpu.usage_percent]].slice(-60) }]
+                    });
+
+                    // Memory
+                    charts.mem.setOption({
+                        series: [{ data: [...charts.mem.getOption().series[0].data, [time, metrics.memory.percent]].slice(-60) }]
+                    });
+
+                    // Network (Combined RX/TX for simplicity, or we could add another series)
+                    charts.net.setOption({
+                        series: [{ data: [...charts.net.getOption().series[0].data, [time, metrics.network.rx_kbps]].slice(-60) }]
+                    });
+
+                    // Disk
+                    charts.disk.setOption({
+                        series: [{ data: [...charts.disk.getOption().series[0].data, [time, metrics.disk.read_kbps]].slice(-60) }]
+                    });
+                };
+
+                const handleHistory = (history) => {
+                    history.forEach(metrics => {
+                        const time = metrics.timestamp * 1000;
+                        charts.cpu.getOption().series[0].data.push([time, metrics.cpu.usage_percent]);
+                        charts.mem.getOption().series[0].data.push([time, metrics.memory.percent]);
+                        charts.net.getOption().series[0].data.push([time, metrics.network.rx_kbps]);
+                        charts.disk.getOption().series[0].data.push([time, metrics.disk.read_kbps]);
+                    });
+                };
+
+                onMounted(async () => {
+                    // 1. Fetch Config
+                    try {
+                        const res = await fetch('/api/config');
+                        config.value = await res.json();
+                    } catch (e) { console.error("Config fetch failed", e); }
+
+                    // 2. Init Charts
+                    charts.cpu = initChart('cpu-chart', 'CPU Usage', '#3498db');
+                    charts.mem = initChart('mem-chart', 'Memory Usage', '#9b59b6');
+                    charts.net = initChart('net-chart', 'Network RX', '#2ecc71');
+                    charts.disk = initChart('disk-chart', 'Disk Read', '#e67e22');
+
+                    // 3. Connect WebSocket
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    ws = new WebSocket(`${protocol}//${window.location.host}/ws/metrics`);
+                    
+                    ws.onopen = () => { isConnected.ref = true; isConnected.value = true; };
+                    ws.onclose = () => { isConnected.value = false; };
+                    
+                    ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        if (Array.isArray(data)) {
+                            handleHistory(data);
+                        } else {
+                            updateCharts(data);
+                        }
+                    };
+                });
+
+                return { isConnected, config };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

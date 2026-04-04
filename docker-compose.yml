@@ -1,0 +1,12 @@
+services:
+  monitor-app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+    privileged: true # 讀取底層 /proc 檔案有時需要較高權限
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1

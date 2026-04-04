@@ -1,0 +1,16 @@
+core:
+  interval: 1.0        # Data collection interval in seconds
+  buffer_size: 100     # Number of data points to keep in memory
+  host: "0.0.0.0"      # Server host
+  port: 8000           # Server port
+
+metrics:
+  cpu: true
+  memory: true
+  network: true
+  disk: true
+
+appearance:
+  theme: "dark"
+  primary_color: "#3498db"
+  chart_type: "line"
