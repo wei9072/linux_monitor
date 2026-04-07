@@ -5,5 +5,6 @@ pydantic
 psutil
 pytest
 websockets
+httpx
 requests
 rich

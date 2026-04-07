@@ -1,6 +1,7 @@
 import asyncio
 import collections
 import time
+import inspect
 from typing import List, Optional, Callable, Any
 from .collector import SystemCollector
 from .schemas import SystemMetrics
@@ -17,7 +18,7 @@ class SystemDataManager:
         """Add a data point to the buffer."""
         self.buffer.append(metrics)
         if self.broadcast_callback:
-            if asyncio.iscoroutinefunction(self.broadcast_callback):
+            if inspect.iscoroutinefunction(self.broadcast_callback):
                 asyncio.create_task(self.broadcast_callback(metrics))
             else:
                 self.broadcast_callback(metrics)
